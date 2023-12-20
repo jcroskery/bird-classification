@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 import torchvision as tv
 import torchvision.transforms.functional as TF
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 
 
@@ -207,9 +208,10 @@ splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RAN
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
 
 # set hyper-parameters
-params = {'batch_size': 24, 'num_workers': 8}
+params = {'batch_size': 2, 'num_workers': 8}
 num_epochs = 100
-num_classes = 200
+num_classes = 5
+pretrained = True
 
 # instantiate data loaders
 train_loader = td.DataLoader(
@@ -225,14 +227,16 @@ val_loader = td.DataLoader(
 test_loader = td.DataLoader(dataset=ds_test, **params)
 
 # instantiate the model
-model = tv.models.resnet50(num_classes=num_classes).to(DEVICE)
+model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
+
+model.fc=torch.nn.Linear(2048,num_classes)
 
 # instantiate optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
 # generate model description string
-model_desc = get_model_desc(num_classes=num_classes)
+model_desc = get_model_desc(num_classes=num_classes, pretrained=pretrained)
 
 # define the training loop
 best_snapshot_path = None
@@ -244,10 +248,10 @@ for epoch in range(num_epochs):
     # train the model
     model.train()
     train_loss = list()
-    batch_counter = 0
+    i = 0
     for batch in train_loader:
-        batch_counter += 1
-        print("Training batch " + str(batch_counter) + " of " + str(len(train_loader)))
+        i += 1
+        print(f"Training batch {i} of {len(train_loader)}")
         x, y = batch
         
         x = x.to(DEVICE)
@@ -255,7 +259,7 @@ for epoch in range(num_epochs):
         
         optimizer.zero_grad()
         
-        # predict bird species
+        # calculate the loss
         y_pred = model(x)
         
         # calculate the loss
@@ -277,7 +281,7 @@ for epoch in range(num_epochs):
 
             x = x.to(DEVICE)
             y = y.to(DEVICE)
-
+            
             # predict bird species
             y_pred = model(x)
 
@@ -302,12 +306,38 @@ for epoch in range(num_epochs):
             best_snapshot_path = os.path.join(OUT_DIR, f'model_{model_desc}_ep={epoch}_acc={best_val_acc}.pt')
 
             torch.save(model.state_dict(), best_snapshot_path)
-    
+
     # adjust the learning rate
     scheduler.step()
 
     # print performance metrics
-    if (epoch == 0) or ((epoch + 1) % 10 == 0):
-        print('Epoch {} |> Train. loss: {:.4f} | Val. loss: {:.4f}'.format(
-            epoch + 1, np.mean(train_loss), np.mean(val_loss))
-        )
+    print('Epoch {} |> Train. loss: {:.4f} | Val. loss: {:.4f}'.format(
+        epoch + 1, np.mean(train_loss), np.mean(val_loss))
+    )
+        
+# use the best model snapshot
+model.load_state_dict(torch.load(best_snapshot_path, map_location=DEVICE))
+        
+# test the model
+true = list()
+pred = list()
+with torch.no_grad():
+    for batch in test_loader:
+        x, y = batch
+
+        x = x.to(DEVICE)
+        y = y.to(DEVICE)
+
+        y_pred = model(x)
+
+        true.extend([val.item() for val in y])
+        pred.extend([val.item() for val in y_pred.argmax(dim=-1)])
+
+# calculate the accuracy 
+test_accuracy = skmt.accuracy_score(true, pred)
+
+# save the accuracy
+path_to_logs = f'{OUT_DIR}/logs.csv'
+log_accuracy(path_to_logs, model_desc, test_accuracy)
+
+print('Test accuracy: {:.3f}'.format(test_accuracy))
