@@ -11,7 +11,6 @@ import torch.nn.functional as F
 
 import torchvision as tv
 import torchvision.transforms.functional as TF
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 
 
