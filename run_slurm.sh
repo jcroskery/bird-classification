@@ -7,5 +7,4 @@
 cd $SLURM_TMPDIR
 git clone https://github.com/jcroskery/caltech-birds-advanced-classification
 cd caltech-birds-advanced-classification
-module load python/3.11.5
 python ./main.py

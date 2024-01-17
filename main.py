@@ -1,6 +1,7 @@
 # import packages
 import os
 
+from tqdm import tqdm
 import numpy as np
 import sklearn.model_selection as skms
 import sklearn.metrics as skmt
@@ -15,7 +16,7 @@ import torchvision.transforms.functional as TF
 
 
 # define constants
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
 OUT_DIR = 'results'
 RANDOM_SEED = 42
 
@@ -45,7 +46,7 @@ def get_model_desc(pretrained=False, num_classes=200, use_attention=False):
     return '-'.join(desc)
 
 
-def log_accuracy(path_to_csv, desc, acc, sep='\t', newline='\n'):
+def save_accuracy(path_to_csv, desc, acc, sep='\t', newline='\n'):
     """
     Logs accuracy into a CSV-file.
     """
@@ -248,27 +249,42 @@ for epoch in range(num_epochs):
     model.train()
     train_loss = list()
     i = 0
-    for batch in train_loader:
+    for batch in tqdm(train_loader):
         i += 1
         print(f"Training batch {i} of {len(train_loader)}")
         x, y = batch
+        print("after batch split")
         
         x = x.to(DEVICE)
+        print("after call on x")
         y = y.to(DEVICE)
+        print("after call on y")
         
         optimizer.zero_grad()
+
+        print("after setting gradient settings")
         
         # calculate the loss
         y_pred = model(x)
         
+        print("after model calculation")
+        
         # calculate the loss
         loss = F.cross_entropy(y_pred, y)
         
+        print("after entropy calculation")
+        
         # backprop & update weights 
         loss.backward()
+        
+        print("after backward propogation")
         optimizer.step()
+        
+        print("after optimizer step")
 
         train_loss.append(loss.item())
+        
+        print("after train_loss append")
         
     # validate the model
     model.eval()
@@ -337,6 +353,6 @@ test_accuracy = skmt.accuracy_score(true, pred)
 
 # save the accuracy
 path_to_logs = f'{OUT_DIR}/logs.csv'
-log_accuracy(path_to_logs, model_desc, test_accuracy)
+save_accuracy(path_to_logs, model_desc, test_accuracy)
 
 print('Test accuracy: {:.3f}'.format(test_accuracy))
