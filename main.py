@@ -13,6 +13,8 @@ import torch.nn.functional as F
 import torchvision as tv
 import torchvision.transforms.functional as TF
 
+import random
+
 
 
 # define constants
@@ -97,7 +99,7 @@ class DatasetBirds(tv.datasets.ImageFolder):
         with open(path_to_splits, 'r') as in_file:
             for line in in_file:
                 idx, use_train = line.strip('\n').split(' ', 2)
-                if bool(int(use_train)) == self.train:
+                if bool(random.getrandbits(1)):
                     indices_to_use.append(int(idx))
 
         # obtain filenames of images
@@ -208,8 +210,8 @@ splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RAN
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
 
 # set hyper-parameters
-params = {'batch_size': 2, 'num_workers': 0}
-num_epochs = 100
+params = {'batch_size': 16, 'num_workers': 8}
+num_epochs = 1
 num_classes = 5
 pretrained = True
 
@@ -229,7 +231,7 @@ test_loader = td.DataLoader(dataset=ds_test, **params)
 # instantiate the model
 model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
 
-model.fc=torch.nn.Linear(2048,num_classes)
+model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
 
 # instantiate optimizer and scheduler
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -251,40 +253,25 @@ for epoch in range(num_epochs):
     i = 0
     for batch in tqdm(train_loader):
         i += 1
-        print(f"Training batch {i} of {len(train_loader)}")
         x, y = batch
-        print("after batch split")
         
         x = x.to(DEVICE)
-        print("after call on x")
         y = y.to(DEVICE)
-        print("after call on y")
         
         optimizer.zero_grad()
-
-        print("after setting gradient settings")
         
         # calculate the loss
         y_pred = model(x)
         
-        print("after model calculation")
-        
         # calculate the loss
         loss = F.cross_entropy(y_pred, y)
-        
-        print("after entropy calculation")
         
         # backprop & update weights 
         loss.backward()
         
-        print("after backward propogation")
         optimizer.step()
-        
-        print("after optimizer step")
 
         train_loss.append(loss.item())
-        
-        print("after train_loss append")
         
     # validate the model
     model.eval()
