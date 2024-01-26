@@ -211,7 +211,7 @@ idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets
 
 # set hyper-parameters
 params = {'batch_size': 16, 'num_workers': 8}
-num_epochs = 1
+num_epochs = 100
 num_classes = 5
 pretrained = True
 
