@@ -1,0 +1,256 @@
+PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
+
+# import packages
+import os
+
+from tqdm import tqdm
+import numpy as np
+import sklearn.model_selection as skms
+import sklearn.metrics as skmt
+
+import torch
+import torch.utils.data as td
+import torch.nn.functional as F
+
+import torchvision as tv
+import torchvision.transforms.functional as TF
+
+import random
+
+
+
+# define constants
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
+OUT_DIR = 'results'
+RANDOM_SEED = 42
+
+in_dir_data = 'data/CUB_200_2011'
+
+# create an output folder
+os.makedirs(OUT_DIR, exist_ok=True)
+
+
+def get_model_desc(pretrained=False, num_classes=200, use_attention=False):
+    """
+    Generates description string.  
+    """
+    desc = list()
+
+    if pretrained:
+        desc.append('Transfer')
+    else:
+        desc.append('Baseline')
+
+    if num_classes == 204:
+        desc.append('Multitask')
+
+    if use_attention:
+        desc.append('Attention')
+
+    return '-'.join(desc)
+
+
+def save_accuracy(path_to_csv, desc, acc, sep='\t', newline='\n'):
+    """
+    Logs accuracy into a CSV-file.
+    """
+    file_exists = os.path.exists(path_to_csv)
+
+    mode = 'a'
+    if not file_exists:
+        mode += '+'
+
+    with open(path_to_csv, mode) as csv:
+        if not file_exists:
+            csv.write(f'setup{sep}accuracy{newline}')
+
+        csv.write(f'{desc}{sep}{acc}{newline}')
+
+
+class DatasetBirds(tv.datasets.ImageFolder):
+    """
+    Wrapper for the CUB-200-2011 dataset. 
+    Method DatasetBirds.__getitem__() returns tuple of image and its corresponding label.    
+    """
+    def __init__(self,
+                 root,
+                 transform=None,
+                 target_transform=None,
+                 loader=tv.datasets.folder.default_loader,
+                 is_valid_file=None,
+                 train=True,
+                 bboxes=False):
+
+        img_root = os.path.join(root, 'images')
+
+        super(DatasetBirds, self).__init__(
+            root=img_root,
+            transform=None,
+            target_transform=None,
+            loader=loader,
+            is_valid_file=is_valid_file,
+        )
+
+        self.transform_ = transform
+        self.target_transform_ = target_transform
+        self.train = train
+        
+        # obtain sample ids filtered by split
+        path_to_splits = os.path.join(root, 'train_test_split.txt')
+        indices_to_use = list()
+        with open(path_to_splits, 'r') as in_file:
+            for line in in_file:
+                idx, use_train = line.strip('\n').split(' ', 2)
+                if bool(random.getrandbits(1)):
+                    indices_to_use.append(int(idx))
+
+        # obtain filenames of images
+        path_to_index = os.path.join(root, 'images.txt')
+        filenames_to_use = set()
+        with open(path_to_index, 'r') as in_file:
+            for line in in_file:
+                idx, fn = line.strip('\n').split(' ', 2)
+                if int(idx) in indices_to_use:
+                    filenames_to_use.add(fn)
+
+        img_paths_cut = {'/'.join(img_path.rsplit('/', 2)[-2:]): idx for idx, (img_path, lb) in enumerate(self.imgs)}
+        imgs_to_use = [self.imgs[img_paths_cut[fn]] for fn in filenames_to_use]
+
+        _, targets_to_use = list(zip(*imgs_to_use))
+
+        self.imgs = self.samples = imgs_to_use
+        self.targets = targets_to_use
+
+        if bboxes:
+            # get coordinates of a bounding box
+            path_to_bboxes = os.path.join(root, 'bounding_boxes.txt')
+            bounding_boxes = list()
+            with open(path_to_bboxes, 'r') as in_file:
+                for line in in_file:
+                    idx, x, y, w, h = map(lambda x: float(x), line.strip('\n').split(' '))
+                    if int(idx) in indices_to_use:
+                        bounding_boxes.append((x, y, w, h))
+
+            self.bboxes = bounding_boxes
+        else:
+            self.bboxes = None
+
+    def __getitem__(self, index):
+        # generate one sample
+        sample, target = super(DatasetBirds, self).__getitem__(index)
+
+        if self.bboxes is not None:
+            # squeeze coordinates of the bounding box to range [0, 1]
+            width, height = sample.width, sample.height
+            x, y, w, h = self.bboxes[index]
+
+            scale_resize = 500 / width
+            scale_resize_crop = scale_resize * (375 / 500)
+
+            x_rel = scale_resize_crop * x / 375
+            y_rel = scale_resize_crop * y / 375
+            w_rel = scale_resize_crop * w / 375
+            h_rel = scale_resize_crop * h / 375
+
+            target = torch.tensor([target, x_rel, y_rel, w_rel, h_rel])
+
+        if self.transform_ is not None:
+            sample = self.transform_(sample)
+        if self.target_transform_ is not None:
+            target = self.target_transform_(target)
+
+        return sample, target
+
+def pad(img, fill=0, size_max=500):
+    """
+    Pads images to the specified size (height x width). 
+    Fills up the padded area with value(s) passed to the `fill` parameter. 
+    """
+    dimensions = tv.transforms.functional.get_image_size(img)
+    pad_height = max(0, size_max - dimensions[1])
+    pad_width = max(0, size_max - dimensions[0])
+    
+    pad_top = pad_height // 2
+    pad_bottom = pad_height - pad_top
+    pad_left = pad_width // 2
+    pad_right = pad_width - pad_left
+    
+    return TF.pad(img, (pad_left, pad_top, pad_right, pad_bottom), fill=fill)
+
+# fill padded area with ImageNet's mean pixel value converted to range [0, 255]
+fill = tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406)))
+# pad images to 500 pixels
+max_padding = tv.transforms.Lambda(lambda x: pad(x, fill=fill))
+
+# fill padded area with ImageNet's mean pixel value converted to range [0, 255]
+fill = tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406)))
+
+# transform images
+transforms_train = tv.transforms.Compose([
+   max_padding,
+   tv.transforms.RandomOrder([
+       tv.transforms.RandomCrop((375, 375)),
+       tv.transforms.RandomHorizontalFlip(),
+       tv.transforms.RandomVerticalFlip()
+   ]),
+   tv.transforms.ToTensor(),
+   tv.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+transforms_eval = tv.transforms.Compose([
+   max_padding,
+   tv.transforms.CenterCrop((375, 375)),
+   tv.transforms.ToTensor(),
+   tv.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+
+# instantiate dataset objects according to the pre-defined splits
+ds_train = DatasetBirds(in_dir_data, transform=transforms_train, train=True)
+ds_val = DatasetBirds(in_dir_data, transform=transforms_eval, train=True)
+ds_test = DatasetBirds(in_dir_data, transform=transforms_eval, train=False)
+
+splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RANDOM_SEED)
+idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
+
+# set hyper-parameters
+params = {'batch_size': 16, 'num_workers': 0}
+num_epochs = 100
+num_classes = 200
+pretrained = True
+
+# instantiate data loaders
+train_loader = td.DataLoader(
+   dataset=ds_train,
+   sampler=td.SubsetRandomSampler(idx_train),
+   **params
+)
+val_loader = td.DataLoader(
+   dataset=ds_val,
+   sampler=td.SubsetRandomSampler(idx_val),
+   **params
+)
+test_loader = td.DataLoader(dataset=ds_test, **params)
+
+# instantiate the model
+model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
+
+model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
+
+model.load_state_dict(torch.load(PATH))
+model.eval()
+
+true = list()
+pred = list()
+with torch.no_grad():
+    for batch in test_loader:
+        x, y = batch
+
+        x = x.to(DEVICE)
+        y = y.to(DEVICE)
+
+        y_pred = model(x)
+
+        true.extend([val.item() for val in y])
+        pred.extend([val.item() for val in y_pred.argmax(dim=-1)])
+
+test_accuracy = skmt.accuracy_score(true, pred)
+print('Test accuracy: {:.3f}'.format(test_accuracy))

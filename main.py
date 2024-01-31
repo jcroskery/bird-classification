@@ -13,8 +13,6 @@ import torch.nn.functional as F
 import torchvision as tv
 import torchvision.transforms.functional as TF
 
-import random
-
 
 
 # define constants
@@ -210,9 +208,9 @@ splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RAN
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
 
 # set hyper-parameters
-params = {'batch_size': 16, 'num_workers': 8}
+params = {'batch_size': 16, 'num_workers': 0}
 num_epochs = 100
-num_classes = 5
+num_classes = 200
 pretrained = True
 
 # instantiate data loaders
