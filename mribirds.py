@@ -18,7 +18,10 @@ import torchvision.transforms.functional as TF
 # define constants
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
 OUT_DIR = 'results'
-RANDOM_SEED = 42
+IS_MODEL_FROZEN = True
+IS_SAVED_MODULE = False
+PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
+RANDOM_SEED = 44
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
@@ -183,7 +186,7 @@ idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets
 
 # set hyper-parameters
 params = {'batch_size': 24, 'num_workers': 2}
-num_epochs = 10
+num_epochs = 20
 num_classes = 18
 pretrained = True
 
@@ -203,11 +206,27 @@ test_loader = td.DataLoader(dataset=ds_test, **params)
 # instantiate the model
 model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
 
+if (IS_SAVED_MODULE):
+    model.fc=torch.nn.Linear(2048,200).to(DEVICE)
+    model.load_state_dict(torch.load(PATH))
+    model.eval()
+ 
 model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
 
+if (IS_MODEL_FROZEN):
+    for param in model.parameters():
+        param.requires_grad = False
+    for param in model.fc.parameters():
+        param.requires_grad = True
+    learning_rate = 1e-3
+    decay = 0.95
+else:
+    learning_rate = 1e-4
+    decay = 0.95
+
 # instantiate optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=decay)
 
 # generate model description string
 model_desc = get_model_desc(num_classes=num_classes, pretrained=pretrained)
