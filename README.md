@@ -1,7 +1,11 @@
 # Bird Classifier - Version 1
+## Running the Project
+The file `main.py` trains Resnet-50 on 200 image classes from the Caltech dataset.
+The file `mribirds.py` trains Resnet-50 on our 18 image classes from the MRI study.
+The file `test_model.py` calculates the accuracy of a model and generates a confusion matrix.
+
 ## Running in Slurm
 If using Slurm, run `./run_slurm.sh` to run our model.
-This clones our repository into `$SLURM_TMPDIR` and executes main.py.
 
 ## Docker Installation
 First, build the docker image from the Dockerfile inside this repository using the command `docker build --tag 'birds'`.
