@@ -18,10 +18,10 @@ import torchvision.transforms.functional as TF
 # define constants
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
 OUT_DIR = 'results'
-IS_MODEL_FROZEN = True
+IS_MODEL_FROZEN = False
 IS_SAVED_MODULE = False
 PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
-RANDOM_SEED = 44
+RANDOM_SEED = 43
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
@@ -29,43 +29,6 @@ in_dir_data = 'mribirdsdata'
 
 # create an output folder
 os.makedirs(OUT_DIR, exist_ok=True)
-
-
-def get_model_desc(pretrained=False, num_classes=200, use_attention=False):
-    """
-    Generates description string.  
-    """
-    desc = list()
-
-    if pretrained:
-        desc.append('Transfer')
-    else:
-        desc.append('Baseline')
-
-    if num_classes == 204:
-        desc.append('Multitask')
-
-    if use_attention:
-        desc.append('Attention')
-
-    return '-'.join(desc)
-
-
-def save_accuracy(path_to_csv, desc, acc, sep='\t', newline='\n'):
-    """
-    Logs accuracy into a CSV-file.
-    """
-    file_exists = os.path.exists(path_to_csv)
-
-    mode = 'a'
-    if not file_exists:
-        mode += '+'
-
-    with open(path_to_csv, mode) as csv:
-        if not file_exists:
-            csv.write(f'setup{sep}accuracy{newline}')
-
-        csv.write(f'{desc}{sep}{acc}{newline}')
 
 
 class DatasetBirds(tv.datasets.ImageFolder):
@@ -162,9 +125,8 @@ fill = tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406)))
 transforms_train = tv.transforms.Compose([
    max_padding,
    tv.transforms.RandomOrder([
-       tv.transforms.RandomCrop((375, 375)),
+       tv.transforms.CenterCrop((375, 375)),
        tv.transforms.RandomHorizontalFlip(),
-       tv.transforms.RandomVerticalFlip()
    ]),
    tv.transforms.ToTensor(),
    tv.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -227,9 +189,6 @@ else:
 # instantiate optimizer and scheduler
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=decay)
-
-# generate model description string
-model_desc = get_model_desc(num_classes=num_classes, pretrained=pretrained)
 
 # define the training loop
 best_snapshot_path = None
@@ -296,7 +255,7 @@ for epoch in range(num_epochs):
                 os.remove(best_snapshot_path)
 
             best_val_acc = current_val_acc
-            best_snapshot_path = os.path.join(OUT_DIR, f'model_{model_desc}_ep={epoch}_acc={best_val_acc}.pt')
+            best_snapshot_path = os.path.join(OUT_DIR, f'model_mribirds_frozen={IS_MODEL_FROZEN}_finetuned={IS_SAVED_MODULE}_ep={epoch}_acc={best_val_acc}.pt')
 
             torch.save(model.state_dict(), best_snapshot_path)
 
@@ -328,9 +287,5 @@ with torch.no_grad():
 
 # calculate the accuracy 
 test_accuracy = skmt.accuracy_score(true, pred)
-
-# save the accuracy
-path_to_logs = f'{OUT_DIR}/logs.csv'
-save_accuracy(path_to_logs, model_desc, test_accuracy)
 
 print('Test accuracy: {:.3f}'.format(test_accuracy))

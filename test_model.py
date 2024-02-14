@@ -1,4 +1,4 @@
-PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
+PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=18_acc=0.9722222222222223.pt"
 
 # import packages
 import os
@@ -7,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 import sklearn.model_selection as skms
 import sklearn.metrics as skmt
+from sklearn.metrics import confusion_matrix
 
 import torch
 import torch.utils.data as td
@@ -15,7 +16,8 @@ import torch.nn.functional as F
 import torchvision as tv
 import torchvision.transforms.functional as TF
 
-import random
+from sklearn.metrics import ConfusionMatrixDisplay 
+from matplotlib import pyplot as plt
 
 
 
@@ -24,47 +26,10 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 OUT_DIR = 'results'
 RANDOM_SEED = 42
 
-in_dir_data = 'data/CUB_200_2011'
+in_dir_data = 'mribirdsdata'
 
 # create an output folder
 os.makedirs(OUT_DIR, exist_ok=True)
-
-
-def get_model_desc(pretrained=False, num_classes=200, use_attention=False):
-    """
-    Generates description string.  
-    """
-    desc = list()
-
-    if pretrained:
-        desc.append('Transfer')
-    else:
-        desc.append('Baseline')
-
-    if num_classes == 204:
-        desc.append('Multitask')
-
-    if use_attention:
-        desc.append('Attention')
-
-    return '-'.join(desc)
-
-
-def save_accuracy(path_to_csv, desc, acc, sep='\t', newline='\n'):
-    """
-    Logs accuracy into a CSV-file.
-    """
-    file_exists = os.path.exists(path_to_csv)
-
-    mode = 'a'
-    if not file_exists:
-        mode += '+'
-
-    with open(path_to_csv, mode) as csv:
-        if not file_exists:
-            csv.write(f'setup{sep}accuracy{newline}')
-
-        csv.write(f'{desc}{sep}{acc}{newline}')
 
 
 class DatasetBirds(tv.datasets.ImageFolder):
@@ -80,7 +45,6 @@ class DatasetBirds(tv.datasets.ImageFolder):
                  is_valid_file=None,
                  train=True,
                  bboxes=False):
-
         img_root = os.path.join(root, 'images')
 
         super(DatasetBirds, self).__init__(
@@ -94,24 +58,26 @@ class DatasetBirds(tv.datasets.ImageFolder):
         self.transform_ = transform
         self.target_transform_ = target_transform
         self.train = train
-        
+
         # obtain sample ids filtered by split
         path_to_splits = os.path.join(root, 'train_test_split.txt')
         indices_to_use = list()
         with open(path_to_splits, 'r') as in_file:
             for line in in_file:
-                idx, use_train = line.strip('\n').split(' ', 2)
-                if bool(random.getrandbits(1)):
-                    indices_to_use.append(int(idx))
+                indices_to_use.append(int(line.strip('\n')))
+                
 
         # obtain filenames of images
         path_to_index = os.path.join(root, 'images.txt')
         filenames_to_use = set()
+        index = 0
         with open(path_to_index, 'r') as in_file:
             for line in in_file:
-                idx, fn = line.strip('\n').split(' ', 2)
-                if int(idx) in indices_to_use:
+                fn = line.strip('\n')
+                if (indices_to_use[index] == 1 and train) or (indices_to_use[index] == 0 and not train):
                     filenames_to_use.add(fn)
+                index += 1
+                
 
         img_paths_cut = {'/'.join(img_path.rsplit('/', 2)[-2:]): idx for idx, (img_path, lb) in enumerate(self.imgs)}
         imgs_to_use = [self.imgs[img_paths_cut[fn]] for fn in filenames_to_use]
@@ -121,38 +87,9 @@ class DatasetBirds(tv.datasets.ImageFolder):
         self.imgs = self.samples = imgs_to_use
         self.targets = targets_to_use
 
-        if bboxes:
-            # get coordinates of a bounding box
-            path_to_bboxes = os.path.join(root, 'bounding_boxes.txt')
-            bounding_boxes = list()
-            with open(path_to_bboxes, 'r') as in_file:
-                for line in in_file:
-                    idx, x, y, w, h = map(lambda x: float(x), line.strip('\n').split(' '))
-                    if int(idx) in indices_to_use:
-                        bounding_boxes.append((x, y, w, h))
-
-            self.bboxes = bounding_boxes
-        else:
-            self.bboxes = None
-
     def __getitem__(self, index):
         # generate one sample
         sample, target = super(DatasetBirds, self).__getitem__(index)
-
-        if self.bboxes is not None:
-            # squeeze coordinates of the bounding box to range [0, 1]
-            width, height = sample.width, sample.height
-            x, y, w, h = self.bboxes[index]
-
-            scale_resize = 500 / width
-            scale_resize_crop = scale_resize * (375 / 500)
-
-            x_rel = scale_resize_crop * x / 375
-            y_rel = scale_resize_crop * y / 375
-            w_rel = scale_resize_crop * w / 375
-            h_rel = scale_resize_crop * h / 375
-
-            target = torch.tensor([target, x_rel, y_rel, w_rel, h_rel])
 
         if self.transform_ is not None:
             sample = self.transform_(sample)
@@ -214,7 +151,7 @@ idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets
 # set hyper-parameters
 params = {'batch_size': 16, 'num_workers': 0}
 num_epochs = 100
-num_classes = 200
+num_classes = 18
 pretrained = True
 
 # instantiate data loaders
@@ -252,5 +189,43 @@ with torch.no_grad():
         true.extend([val.item() for val in y])
         pred.extend([val.item() for val in y_pred.argmax(dim=-1)])
 
-test_accuracy = skmt.accuracy_score(true, pred)
+reindex = [7, 10, 16, 17, 8, 13, 4, 14, 1, 5, 11, 18, 2, 9, 3, 6, 15, 12] # Shift these down by 1
+
+reorderedtrue = [0] * len(true)
+reorderedpred = [0] * len(pred)
+for i in range(len(reorderedtrue)):
+    reorderedtrue[i] = reindex[true[i]] - 1
+for i in range(len(reorderedpred)):
+    reorderedpred[i] = reindex[pred[i]] - 1
+
+reorderedclasses = [0] * len(ds_test.classes)
+for i in range(len(ds_test.classes)):
+    reorderedclasses[i] = ds_test.classes[reindex[i] - 1]
+
+print(reorderedtrue)
+print(reorderedpred)
+print(reorderedclasses)
+
+test_accuracy = skmt.accuracy_score(reorderedtrue, reorderedpred)
 print('Test accuracy: {:.3f}'.format(test_accuracy))
+
+confusion = confusion_matrix(reorderedtrue, reorderedpred, normalize='pred')
+disp = ConfusionMatrixDisplay(confusion_matrix=confusion, display_labels=reorderedclasses) 
+fig, ax = plt.subplots(figsize=(10, 10))
+disp.plot(ax=ax, xticks_rotation='vertical')
+plt.tight_layout()
+plt.savefig('confusion.png', pad_inches=5)
+
+layer_names = [
+    'conv2_block3_out',  # Middle of the 2nd residual block
+    'conv3_block4_out',  # Middle of the 3rd residual block
+    'conv4_block6_out',  # Middle of the 4th residual block
+    'conv5_block3_out',  # Middle of the 5th residual block
+    'avg_pool',          # Penultimate layer (Global Average Pooling)
+    'probs'              # Output layer (Softmax)
+]
+layer_outputs = [model.get_layer(name).output for name in layer_names]
+activation_model = Model(inputs=model.input, outputs=layer_outputs)
+activations = activation_model.predict(cueimages)
+
+flattened_activations = [activation.reshape(activation.shape[0], -1) for activation in activations]
