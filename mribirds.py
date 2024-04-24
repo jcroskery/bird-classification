@@ -13,6 +13,8 @@ import torch.nn.functional as F
 import torchvision as tv
 import torchvision.transforms.functional as TF
 
+import thingsvision
+
 
 
 # define constants
@@ -21,7 +23,7 @@ OUT_DIR = 'results'
 IS_MODEL_FROZEN = False
 IS_SAVED_MODULE = False
 PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
-RANDOM_SEED = 43
+RANDOM_SEED = 42
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 

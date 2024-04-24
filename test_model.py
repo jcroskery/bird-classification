@@ -1,4 +1,4 @@
-PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=18_acc=0.9722222222222223.pt"
+PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=5_acc=0.9861111111111112.pt"
 
 # import packages
 import os
@@ -189,43 +189,29 @@ with torch.no_grad():
         true.extend([val.item() for val in y])
         pred.extend([val.item() for val in y_pred.argmax(dim=-1)])
 
-reindex = [7, 10, 16, 17, 8, 13, 4, 14, 1, 5, 11, 18, 2, 9, 3, 6, 15, 12] # Shift these down by 1
+# reindex = [7, 10, 16, 17, 8, 13, 4, 14, 1, 5, 11, 18, 2, 9, 3, 6, 15, 12] # Shift these down by 1
 
-reorderedtrue = [0] * len(true)
-reorderedpred = [0] * len(pred)
-for i in range(len(reorderedtrue)):
-    reorderedtrue[i] = reindex[true[i]] - 1
-for i in range(len(reorderedpred)):
-    reorderedpred[i] = reindex[pred[i]] - 1
+# reorderedtrue = [0] * len(true)
+# reorderedpred = [0] * len(pred)
+# for i in range(len(reorderedtrue)):
+#     reorderedtrue[i] = reindex[true[i]] - 1
+# for i in range(len(reorderedpred)):
+#     reorderedpred[i] = reindex[pred[i]] - 1
 
-reorderedclasses = [0] * len(ds_test.classes)
-for i in range(len(ds_test.classes)):
-    reorderedclasses[i] = ds_test.classes[reindex[i] - 1]
+# reorderedclasses = [0] * len(ds_test.classes)
+# for i in range(len(ds_test.classes)):
+#     reorderedclasses[i] = ds_test.classes[reindex[i] - 1]
 
-print(reorderedtrue)
-print(reorderedpred)
-print(reorderedclasses)
+# print(reorderedtrue)
+# print(reorderedpred)
+# print(reorderedclasses)
 
-test_accuracy = skmt.accuracy_score(reorderedtrue, reorderedpred)
+test_accuracy = skmt.accuracy_score(true, pred)
 print('Test accuracy: {:.3f}'.format(test_accuracy))
 
-confusion = confusion_matrix(reorderedtrue, reorderedpred, normalize='pred')
-disp = ConfusionMatrixDisplay(confusion_matrix=confusion, display_labels=reorderedclasses) 
+confusion = confusion_matrix(true, pred, normalize='pred')
+disp = ConfusionMatrixDisplay(confusion_matrix=confusion, display_labels=ds_test.classes) 
 fig, ax = plt.subplots(figsize=(10, 10))
 disp.plot(ax=ax, xticks_rotation='vertical')
 plt.tight_layout()
 plt.savefig('confusion.png', pad_inches=5)
-
-layer_names = [
-    'conv2_block3_out',  # Middle of the 2nd residual block
-    'conv3_block4_out',  # Middle of the 3rd residual block
-    'conv4_block6_out',  # Middle of the 4th residual block
-    'conv5_block3_out',  # Middle of the 5th residual block
-    'avg_pool',          # Penultimate layer (Global Average Pooling)
-    'probs'              # Output layer (Softmax)
-]
-layer_outputs = [model.get_layer(name).output for name in layer_names]
-activation_model = Model(inputs=model.input, outputs=layer_outputs)
-activations = activation_model.predict(cueimages)
-
-flattened_activations = [activation.reshape(activation.shape[0], -1) for activation in activations]
