@@ -1,4 +1,8 @@
-# import packages
+# mribirds.py
+# This file trains a Resnet-50 model on our 18 bird classes
+# These birds are from our MRI dataset, not the Caltech dataset
+# See the constants below for more options
+
 import os
 
 from tqdm import tqdm
@@ -16,21 +20,38 @@ import torchvision.transforms.functional as TF
 import thingsvision
 
 
+# -- CONSTANTS --
 
-# define constants
+# Use a GPU if one is available
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
+
+# Determines whether we should train only the last layer of the model
+# If true, only the output layer will be trained; all others will be frozen
+ARE_INNER_LAYERS_FROZEN = False
+
+# Determines whether we should fine-tune our existing Caltech model or load a pre-trained model from the Internet
+# If true, our saved Caltech model (trained on 200 bird classes) will be loaded from PATH
+# If false, we will load a ResNet50 model with default weights from ImageNet
+IS_BASED_ON_CALTECH_MODEL = False
+CALTECH_MODEL_PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
+
+# Set Hyperparameters
+params = {'batch_size': 24, 'num_workers': 2}
+num_epochs = 20
+
+
+
+# Directory for output models
 OUT_DIR = 'results'
-IS_MODEL_FROZEN = False
-IS_SAVED_MODULE = False
-PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# Set a seed for increased reproducibility (WIP as not every source of randomness relies on this seed)
 RANDOM_SEED = 42
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
+# Image directory
 in_dir_data = 'mribirdsdata'
-
-# create an output folder
-os.makedirs(OUT_DIR, exist_ok=True)
 
 
 class DatasetBirds(tv.datasets.ImageFolder):
@@ -148,9 +169,7 @@ ds_test = DatasetBirds(in_dir_data, transform=transforms_eval, train=False)
 splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RANDOM_SEED)
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
 
-# set hyper-parameters
-params = {'batch_size': 24, 'num_workers': 2}
-num_epochs = 20
+# Non-adjustible hyperparameters (we will always have 18 classes and be using a pretrained model)
 num_classes = 18
 pretrained = True
 
@@ -170,21 +189,28 @@ test_loader = td.DataLoader(dataset=ds_test, **params)
 # instantiate the model
 model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
 
-if (IS_SAVED_MODULE):
+if (IS_BASED_ON_CALTECH_MODEL):
+    # Load the 200-class model into our model variable
+    # Note that this model has 200 outputs
     model.fc=torch.nn.Linear(2048,200).to(DEVICE)
-    model.load_state_dict(torch.load(PATH))
+    model.load_state_dict(torch.load(CALTECH_MODEL_PATH))
     model.eval()
  
+# Update the final layer to account for our 18 bird classes
 model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
 
-if (IS_MODEL_FROZEN):
+if (ARE_INNER_LAYERS_FROZEN):
+    # Disable model training for all layers except the final layer
     for param in model.parameters():
         param.requires_grad = False
     for param in model.fc.parameters():
+        # Reenable final linear layer training
         param.requires_grad = True
+    # Increase the learning rate to speed up the training of our final layer
     learning_rate = 1e-3
     decay = 0.95
 else:
+    # Learning rate and decay are configurable
     learning_rate = 1e-4
     decay = 0.95
 
@@ -257,7 +283,7 @@ for epoch in range(num_epochs):
                 os.remove(best_snapshot_path)
 
             best_val_acc = current_val_acc
-            best_snapshot_path = os.path.join(OUT_DIR, f'model_mribirds_frozen={IS_MODEL_FROZEN}_finetuned={IS_SAVED_MODULE}_ep={epoch}_acc={best_val_acc}.pt')
+            best_snapshot_path = os.path.join(OUT_DIR, f'model_mribirds_frozen={ARE_INNER_LAYERS_FROZEN}_finetuned={IS_BASED_ON_CALTECH_MODEL}_ep={epoch}_acc={best_val_acc}.pt')
 
             torch.save(model.state_dict(), best_snapshot_path)
 
@@ -291,3 +317,4 @@ with torch.no_grad():
 test_accuracy = skmt.accuracy_score(true, pred)
 
 print('Test accuracy: {:.3f}'.format(test_accuracy))
+print('Stored at {}'.format(best_snapshot_path))

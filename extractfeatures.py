@@ -5,17 +5,30 @@ from thingsvision.utils.storing import save_features
 from thingsvision.utils.data import ImageDataset, DataLoader
 import torchvision.transforms.functional as TF
 
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+# This determines the layer for extraction
+# IMPORTANT: Update this to extract different layers
+module_name = 'fc'
+
+# Model to extract layers from
 PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=5_acc=0.9861111111111112.pt"
+
+# Image location for confusion (TODO: Update this to the cue images)
+root='./mribirdsdata/images' # (e.g., './images/)
+
+
+batch_size = 1
+
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 num_classes = 18
 
 model_name = 'resnet50'
 source = 'torchvision'
-module_name = 'fc'
 output = './features/' + module_name
 device = DEVICE
 
+
+# Load our custom torchvision model
 model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE)
 
 model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
@@ -38,6 +51,8 @@ def pad(img, fill=0, size_max=500):
     pad_right = pad_width - pad_left
     
     return TF.pad(img, (pad_left, pad_top, pad_right, pad_bottom), fill=fill)
+
+
 fill = tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406)))
 max_padding = tv.transforms.Lambda(lambda x: pad(x, fill=fill))
 transforms_eval = tv.transforms.Compose([
@@ -47,14 +62,12 @@ transforms_eval = tv.transforms.Compose([
    tv.transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+# This loads a ThingsVision extractor from our TorchVision model
 extractor = get_extractor_from_model(
   model=model, 
   device=device,
   backend='pt'
 )
-
-root='./mribirdsdata/images' # (e.g., './images/)
-batch_size = 1
 
 dataset = ImageDataset(
   root=root,

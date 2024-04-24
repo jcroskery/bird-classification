@@ -3,6 +3,7 @@
 The file `main.py` trains Resnet-50 on 200 image classes from the Caltech dataset.
 The file `mribirds.py` trains Resnet-50 on our 18 image classes from the MRI study.
 The file `test_model.py` calculates the accuracy of a model and generates a confusion matrix.
+The file `extractfeatures.py` extracts the features from the model and saves them to a hdf5 file.
 
 ## Running in Slurm
 If using Slurm, run `./run_slurm.sh` to run our model.
