@@ -1,1 +1,7 @@
+torch==1.13.1+computecanada
+torchvision==0.14.1+computecanada
+numpy==1.24.2+computecanada
+scikit-learn==1.2.1+computecanada
+tqdm==4.66.1+computecanada
+matplotlib==3.7.0+computecanada
 thingsvision

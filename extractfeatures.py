@@ -7,7 +7,7 @@ import torchvision.transforms.functional as TF
 
 # This determines the layer for extraction
 # IMPORTANT: Update this to extract different layers
-module_name = 'fc'
+module_name = 'conv1'
 
 # Model to extract layers from
 PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=5_acc=0.9861111111111112.pt"
@@ -33,7 +33,7 @@ model = tv.models.resnet50(weights=tv.models.ResNet50_Weights.DEFAULT).to(DEVICE
 
 model.fc=torch.nn.Linear(2048,num_classes).to(DEVICE)
 
-model.load_state_dict(torch.load(PATH))
+model.load_state_dict(torch.load(PATH, map_location='cuda:0')) # Ensures that the model is loaded on the first GPU
 model.eval()
 
 def pad(img, fill=0, size_max=500):
