@@ -14,7 +14,7 @@ The model seems to confuse the same birds that human experts do.
 We are in the process of extracting activation layers from our model for certain 'cue' images to compare them with MRI scan data.
 
 ## Running the Project
-- The file `main.py` trains Resnet-50 on 200 image classes from the [Caltech 2011 dataset](https://www.vision.caltech.edu/datasets/cub_200_2011/).
+- The file `caltech.py` trains Resnet-50 on 200 image classes from the [Caltech 2011 dataset](https://www.vision.caltech.edu/datasets/cub_200_2011/).
 - The file `mribirds.py` trains Resnet-50 on our 18 image classes.
 - The file `test_model.py` calculates the accuracy of a model and generates a confusion matrix for the 18 species. This confusion matrix will be compared with the confusion matrices for both human experts and novices.
 - The file `extractfeatures.py` extracts the activations for a specified internal layer and saves them to a hdf5 file.
