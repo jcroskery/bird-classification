@@ -19,17 +19,11 @@ import torchvision.transforms.functional as TF
 from sklearn.metrics import ConfusionMatrixDisplay 
 from matplotlib import pyplot as plt
 
-
-
 # define constants
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
-OUT_DIR = 'results'
 RANDOM_SEED = 42
 
 in_dir_data = 'mribirdsdata'
-
-# create an output folder
-os.makedirs(OUT_DIR, exist_ok=True)
 
 
 class DatasetBirds(tv.datasets.ImageFolder):

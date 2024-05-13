@@ -3,9 +3,14 @@
 This project seeks to train a convolutional neural network to identify 18 bird species. 
 We will compare the CNN's inner layers to MRI scans from humans attempting the same task.
 
+## Our Data
+We have two datasets:
+1. 200 bird species from the [Caltech 2011 dataset](https://www.vision.caltech.edu/datasets/cub_200_2011/) with about 50 images per species, found in `./caltechdata`. This dataset can also be downloaded via `scripts/download_caltech_images.sh`.
+2. 18 bird species from our MRI study with about 60 images per species, found in `./mribirdsdata`.
+
 ## Our Model
 Our base model is a Resnet-50 model pretrained on ImageNet. 
-We then train the model on 200 bird species from the [Caltech 2011 dataset](https://www.vision.caltech.edu/datasets/cub_200_2011/). 
+We then train the model on our Caltech 2011 dataset.
 Finally, we fine-tune using 75% of the photos from our human study and evaluate our model on the rest.
 
 ## Results so Far
@@ -20,8 +25,8 @@ We are in the process of extracting activation layers from our model for certain
 - The file `extractfeatures.py` extracts the activations for a specified internal layer and saves them to a hdf5 file.
 
 ## Running in Slurm
-If using Slurm, run `./run_slurm.sh` to run our model.
+If using Slurm, run `./scripts/load_python_env.sh` to load the necessary Python environment and modify this file as needed to run the desired python scripts.
 
-Alternatively, start an interactive Slurm session and run `python main.py` to get started.
+Alternatively, start an interactive Slurm session and run `python caltech.py` to get started.
 
 

@@ -18,10 +18,12 @@ import torchvision.transforms.functional as TF
 
 # define constants
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
-OUT_DIR = 'results'
 RANDOM_SEED = 42
 
-in_dir_data = 'data/CUB_200_2011'
+DATA_DIR = 'data/CUB_200_2011'
+IMAGE_LIST_FILE = 'images.txt'
+TEST_SPLIT_FILE = 'train_test_split.txt'
+OUT_DIR = 'results'
 
 # create an output folder
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -93,7 +95,7 @@ class DatasetBirds(tv.datasets.ImageFolder):
         self.train = train
         
         # obtain sample ids filtered by split
-        path_to_splits = os.path.join(root, 'train_test_split.txt')
+        path_to_splits = os.path.join(root, TEST_SPLIT_FILE)
         indices_to_use = list()
         with open(path_to_splits, 'r') as in_file:
             for line in in_file:
@@ -102,7 +104,7 @@ class DatasetBirds(tv.datasets.ImageFolder):
                     indices_to_use.append(int(idx))
 
         # obtain filenames of images
-        path_to_index = os.path.join(root, 'images.txt')
+        path_to_index = os.path.join(root, IMAGE_LIST_FILE)
         filenames_to_use = set()
         with open(path_to_index, 'r') as in_file:
             for line in in_file:
@@ -201,9 +203,9 @@ transforms_eval = tv.transforms.Compose([
 ])
 
 # instantiate dataset objects according to the pre-defined splits
-ds_train = DatasetBirds(in_dir_data, transform=transforms_train, train=True)
-ds_val = DatasetBirds(in_dir_data, transform=transforms_eval, train=True)
-ds_test = DatasetBirds(in_dir_data, transform=transforms_eval, train=False)
+ds_train = DatasetBirds(DATA_DIR, transform=transforms_train, train=True)
+ds_val = DatasetBirds(DATA_DIR, transform=transforms_eval, train=True)
+ds_test = DatasetBirds(DATA_DIR, transform=transforms_eval, train=False)
 
 splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RANDOM_SEED)
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))

@@ -39,6 +39,10 @@ CALTECH_MODEL_PATH = "results/model_Transfer_ep=43_acc=0.9358108108108109.pt"
 params = {'batch_size': 24, 'num_workers': 2}
 num_epochs = 20
 
+# Image directory and metadata files
+IMAGE_DATA_DIR = 'mribirdsdata'
+IMAGE_LIST_FILE = 'images.txt'
+TEST_SPLIT_FILE = 'train_test_split.txt'
 
 
 # Directory for output models
@@ -49,9 +53,6 @@ os.makedirs(OUT_DIR, exist_ok=True)
 RANDOM_SEED = 42
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
-
-# Image directory
-in_dir_data = 'mribirdsdata'
 
 
 class DatasetBirds(tv.datasets.ImageFolder):
@@ -82,7 +83,7 @@ class DatasetBirds(tv.datasets.ImageFolder):
         self.train = train
 
         # obtain sample ids filtered by split
-        path_to_splits = os.path.join(root, 'train_test_split.txt')
+        path_to_splits = os.path.join(root, TEST_SPLIT_FILE)
         indices_to_use = list()
         with open(path_to_splits, 'r') as in_file:
             for line in in_file:
@@ -90,7 +91,7 @@ class DatasetBirds(tv.datasets.ImageFolder):
                 
 
         # obtain filenames of images
-        path_to_index = os.path.join(root, 'images.txt')
+        path_to_index = os.path.join(root, IMAGE_LIST_FILE)
         filenames_to_use = set()
         index = 0
         with open(path_to_index, 'r') as in_file:
@@ -162,9 +163,9 @@ transforms_eval = tv.transforms.Compose([
 ])
 
 # instantiate dataset objects according to the pre-defined splits
-ds_train = DatasetBirds(in_dir_data, transform=transforms_train, train=True)
-ds_val = DatasetBirds(in_dir_data, transform=transforms_eval, train=True)
-ds_test = DatasetBirds(in_dir_data, transform=transforms_eval, train=False)
+ds_train = DatasetBirds(IMAGE_DATA_DIR, transform=transforms_train, train=True)
+ds_val = DatasetBirds(IMAGE_DATA_DIR, transform=transforms_eval, train=True)
+ds_test = DatasetBirds(IMAGE_DATA_DIR, transform=transforms_eval, train=False)
 
 splits = skms.StratifiedShuffleSplit(n_splits=1, test_size=0.1, random_state=RANDOM_SEED)
 idx_train, idx_val = next(splits.split(np.zeros(len(ds_train)), ds_train.targets))
