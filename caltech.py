@@ -20,7 +20,7 @@ import torchvision.transforms.functional as TF
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
 RANDOM_SEED = 42
 
-DATA_DIR = 'data/CUB_200_2011'
+DATA_DIR = 'caltechdata/CUB_200_2011'
 IMAGE_LIST_FILE = 'images.txt'
 TEST_SPLIT_FILE = 'train_test_split.txt'
 OUT_DIR = 'results'

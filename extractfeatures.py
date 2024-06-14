@@ -5,15 +5,17 @@ from thingsvision.utils.storing import save_features
 from thingsvision.utils.data import ImageDataset, DataLoader
 import torchvision.transforms.functional as TF
 
+# Layers desired: conv1, layer2.3.conv1, layer3.5.conv1, layer4.0.conv1, layer4.2.conv1, fc
+
 # This determines the layer for extraction
 # IMPORTANT: Update this to extract different layers
-module_name = 'conv1'
+module_name = 'fc'
 
 # Model to extract layers from
 PATH = "results/model_mribirds_frozen=False_finetuned=False_ep=5_acc=0.9861111111111112.pt"
 
 # Image location for confusion (TODO: Update this to the cue images)
-root='./mribirdsdata/images' # (e.g., './images/)
+root='./mribirdsdata/cueimages' # (e.g., './images/)
 
 
 batch_size = 1

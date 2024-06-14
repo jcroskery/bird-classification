@@ -19,9 +19,9 @@ def list_files(directory):
     return file_list
 
 def main():
-    directory = "images"
+    directory = "cueimages/"
     file_list = list_files(directory)
-    output_file = "images.txt"
+    output_file = "cueimages.txt"
     with open(output_file, 'w') as f:
         for file_path in file_list:
             f.write(file_path + '\n')
